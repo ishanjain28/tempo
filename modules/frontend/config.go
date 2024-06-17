@@ -3,6 +3,7 @@ package frontend
 import (
 	"flag"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/go-kit/log"
@@ -32,9 +33,11 @@ type Config struct {
 }
 
 type SearchConfig struct {
-	Timeout time.Duration       `yaml:"timeout,omitempty"`
-	Sharder SearchSharderConfig `yaml:",inline"`
-	SLO     SLOConfig           `yaml:",inline"`
+	Timeout           time.Duration `yaml:"timeout,omitempty"`
+	BlockedQueryRegex []string      `yaml:"blocked_query_regex"`
+	blockedQueryRegex []*regexp.Regexp
+	Sharder           SearchSharderConfig `yaml:",inline"`
+	SLO               SLOConfig           `yaml:",inline"`
 }
 
 type TraceByIDConfig struct {
@@ -59,6 +62,11 @@ func (cfg *Config) RegisterFlagsAndApplyDefaults(string, *flag.FlagSet) {
 		ThroughputBytesSLO: 0,
 	}
 
+	blockedQueryRegex := make([]*regexp.Regexp, len(cfg.Search.BlockedQueryRegex))
+	for i, regex := range cfg.Search.BlockedQueryRegex {
+		blockedQueryRegex[i] = regexp.MustCompile(regex)
+	}
+
 	cfg.Config.MaxOutstandingPerTenant = 2000
 	cfg.Config.MaxBatchSize = 5
 	cfg.MaxRetries = 2
@@ -74,7 +82,8 @@ func (cfg *Config) RegisterFlagsAndApplyDefaults(string, *flag.FlagSet) {
 			TargetBytesPerRequest: defaultTargetBytesPerRequest,
 			IngesterShards:        1,
 		},
-		SLO: slo,
+		SLO:               slo,
+		blockedQueryRegex: blockedQueryRegex,
 	}
 	cfg.TraceByID = TraceByIDConfig{
 		QueryShards: 50,

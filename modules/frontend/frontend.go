@@ -79,6 +79,7 @@ func New(cfg Config, next http.RoundTripper, o overrides.Interface, reader tempo
 		return nil, fmt.Errorf("frontend metrics interval should be greater than 0")
 	}
 
+	requestFilterWare := pipeline.NewRequestFilterWare(logger, cfg.Search.blockedQueryRegex)
 	retryWare := pipeline.NewRetryWare(cfg.MaxRetries, registerer)
 	cacheWare := pipeline.NewCachingWare(cacheProvider, cache.RoleFrontendSearch, logger)
 	statusCodeWare := pipeline.NewStatusCodeAdjustWare()
@@ -97,7 +98,7 @@ func New(cfg Config, next http.RoundTripper, o overrides.Interface, reader tempo
 			multiTenantMiddleware(cfg, logger),
 			newAsyncSearchSharder(reader, o, cfg.Search.Sharder, logger),
 		},
-		[]pipeline.Middleware{cacheWare, statusCodeWare, retryWare},
+		[]pipeline.Middleware{requestFilterWare, cacheWare, statusCodeWare, retryWare},
 		next)
 
 	searchTagsPipeline := pipeline.Build(
